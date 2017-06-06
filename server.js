@@ -21,11 +21,15 @@ console.log("Commandline arguments: ", argv);
 var endpoint = argv.endpoint || "http://localhost:8890";
 
 
+
+
+
 var proxy = httpProxy.createProxyServer({});
 
+
+
+
 var serverSparql = http.createServer(function (req, res) {
-
-
     var url_parts = url.parse(req.url, true);
     var query_params = url_parts.query;
 
@@ -55,9 +59,10 @@ var serverSparql = http.createServer(function (req, res) {
                         req.connection.remoteAddress ||
                         req.socket.remoteAddress ||
                         req.connection.socket.remoteAddress
-        }
+        };
 
         logArray.push(sparqlLogEntry);
+        emitRequest(sparqlLogEntry);
         console.log("New SPARQL request", sparqlLogEntry);
     }
 
@@ -68,37 +73,6 @@ var serverSparql = http.createServer(function (req, res) {
 }).listen(5050);
 console.log("SPARQL proxy listening on port 5050")
 
-/*
-proxy.on('proxyRes', function (proxyRes, req, res) {
-
-    if (req.query) {
-        sparqlLogEntry = {
-                'url': req.url,
-                'method': req.method,
-                'host': req.headers.host,
-                'user-agent': req.headers['user-agent'],
-                'time': req.time,
-                'query': req.query,
-                'client': req.ip
-            },
-            'response': {
-                'time': new Date(),
-                'content-type': proxyRes.headers['content-type']
-            }
-        };
-
-        var body_res = [];
-        proxyRes.on('data', function (chunk) {
-            body_res.push(chunk);
-        }).on('end', function () {
-            body_res = Buffer.concat(body_res).toString();
-            sparqlLogEntry.response.result = body_res;
-        });
-
-        logArray.push(sparqlLogEntry);
-    }
-});
-*/
 
 var app = express();
 var serverLog = app.listen(5060);
@@ -107,11 +81,20 @@ app.use(function (req, res, next) {
     res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
-app.get("/queries", function (req, res) {
+app.get("/", function (req, res) {
     res.writeHead(200, {'Content-Type': 'application/json'});
     res.write(JSON.stringify(logArray, true, 2));
     res.end();
 });
+
+var io = require('socket.io').listen(serverLog);
+io.sockets.on('connection', function (socket) {
+    console.log("Client connected", socket.client.id);
+    });
+function emitRequest(data){
+    io.emit("request", data);
+}
+
 console.log("SPARQL statistics listening on port 5060")
 
 
