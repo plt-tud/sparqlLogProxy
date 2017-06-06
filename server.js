@@ -12,6 +12,15 @@ var router = express.Router();
 var logArray = new FifoArray(20);
 
 
+var minimist = require("minimist");
+var argv = minimist(process.argv.slice(2));
+console.log("Commandline arguments: ", argv);
+/* Defaults
+ * endpoint: http://localhost:8890
+ **/
+var endpoint = argv.endpoint || "http://localhost:8890";
+
+
 var proxy = httpProxy.createProxyServer({});
 
 var serverSparql = http.createServer(function (req, res) {
@@ -53,8 +62,7 @@ var serverSparql = http.createServer(function (req, res) {
     }
 
     proxy.web(req, res, {
-        target: 'http://eatld.et.tu-dresden.de:8890'
-        //target: 'http://10.2.52.3:8890'
+        target: endpoint
     });
 
 }).listen(5050);
