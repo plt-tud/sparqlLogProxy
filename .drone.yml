@@ -1,3 +1,8 @@
+clone:
+  git:
+    image: plugins/git
+    skip_verify: true
+    
 pipeline:
   build:
     image: node/alpine
