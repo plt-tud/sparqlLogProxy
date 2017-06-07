@@ -1,32 +1,26 @@
-/**
- * Created by mgraube on 21.05.17.
- */
-var http = require('http');
-var httpProxy = require('http-proxy');
-var qs = require('querystring');
-var url = require('url');
-var FifoArray = require('fifo-array');
+"use strict";
+
+var http = require("http");
+var httpProxy = require("http-proxy");
+var qs = require("querystring");
+var url = require("url");
+var FifoArray = require("fifo-array");
 var express = require("express");
-var router = express.Router();
+var minimist = require("minimist");
+
+/* Defaults
+ * endpoint: http://localhost:8890
+ **/
+
+var argv = minimist(process.argv.slice(2));
+var endpoint = argv.endpoint || "http://localhost:8890";
+console.log("Commandline arguments: ", argv);
+
 
 var logArray = new FifoArray(20);
 
 
-var minimist = require("minimist");
-var argv = minimist(process.argv.slice(2));
-console.log("Commandline arguments: ", argv);
-/* Defaults
- * endpoint: http://localhost:8890
- **/
-var endpoint = argv.endpoint || "http://localhost:8890";
-
-
-
-
-
 var proxy = httpProxy.createProxyServer({});
-
-
 
 
 var serverSparql = http.createServer(function (req, res) {
@@ -36,29 +30,28 @@ var serverSparql = http.createServer(function (req, res) {
     req.time = new Date();
     if (query_params.query) {
         req.query = query_params.query;
-    }
-    else {
+    } else {
         var body = [];
-        req.on('data', function (chunk) {
+        req.on("data", function (chunk) {
             body.push(chunk);
-        }).on('end', function () {
+        }).on("end", function () {
             body = Buffer.concat(body).toString();
             req.query = qs.parse(body).query;
         });
     }
 
     if (req.query) {
-        sparqlLogEntry = {
-            'url': req.url,
-            'method': req.method,
-            'host': req.headers.host,
-            'userAgent': req.headers['user-agent'],
-            'time': new Date,
-            'query': req.query,
-            'client': req.headers['x-forwarded-for'] ||
-                        req.connection.remoteAddress ||
-                        req.socket.remoteAddress ||
-                        req.connection.socket.remoteAddress
+        var sparqlLogEntry = {
+            "url": req.url,
+            "method": req.method,
+            "host": req.headers.host,
+            "userAgent": req.headers["user-agent"],
+            "time": new Date(),
+            "query": req.query,
+            "client": req.headers["x-forwarded-for"] ||
+                    req.connection.remoteAddress ||
+                    req.socket.remoteAddress ||
+                    req.connection.socket.remoteAddress
         };
 
         logArray.push(sparqlLogEntry);
@@ -71,30 +64,30 @@ var serverSparql = http.createServer(function (req, res) {
     });
 
 }).listen(5050);
-console.log("SPARQL proxy listening on port 5050")
+console.log("SPARQL proxy listening on", serverSparql.address());
 
 
 var app = express();
 var serverLog = app.listen(5060);
 app.use(function (req, res, next) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
 app.get("/", function (req, res) {
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.write(JSON.stringify(logArray, true, 2));
+    res.writeHead(200, {"Content-Type": "application/json"});
+    res.write(JSON.stringify(logArray, null, 2));
     res.end();
 });
 
-var io = require('socket.io').listen(serverLog);
-io.sockets.on('connection', function (socket) {
+var io = require("socket.io").listen(serverLog);
+io.sockets.on("connection", function (socket) {
     console.log("Client connected", socket.client.id);
-    });
-function emitRequest(data){
+});
+var emitRequest = function (data) {
     io.emit("request", data);
-}
+};
 
-console.log("SPARQL statistics listening on port 5060")
+console.log("SPARQL statistics listening on", serverLog.address());
 
 
