@@ -46,6 +46,7 @@ var serverSparql = http.createServer(function (req, res) {
             "method": req.method,
             "host": req.headers.host,
             "userAgent": req.headers["user-agent"],
+            "headers": req.headers,
             "time": new Date(),
             "query": req.query,
             "client": req.headers["x-forwarded-for"] ||
