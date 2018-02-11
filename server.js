@@ -23,43 +23,51 @@ var logArray = new FifoArray(20);
 var proxy = httpProxy.createProxyServer({});
 
 
-var serverSparql = http.createServer(function (req, res) {
+proxy.on("proxyRes", function (proxyRes, req, res) {
     var url_parts = url.parse(req.url, true);
     var query_params = url_parts.query;
 
-    req.time = new Date();
     if (query_params.query) {
         req.query = query_params.query;
     } else {
-        var body = [];
+        var bodyRequest = [];
         req.on("data", function (chunk) {
-            body.push(chunk);
+            bodyRequest.push(chunk);
         }).on("end", function () {
-            body = Buffer.concat(body).toString();
-            req.query = qs.parse(body).query;
+            bodyRequest = Buffer.concat(bodyRequest).toString();
+            req.query = qs.parse(bodyRequest).query;
         });
     }
 
-    if (req.query) {
-        var sparqlLogEntry = {
-            "url": req.url,
-            "method": req.method,
-            "host": req.headers.host,
-            "userAgent": req.headers["user-agent"],
-            "headers": req.headers,
-            "time": new Date(),
-            "query": req.query,
-            "client": req.headers["x-forwarded-for"] ||
-                    req.connection.remoteAddress ||
-                    req.socket.remoteAddress ||
-                    req.connection.socket.remoteAddress
-        };
+    var bodyResponse = "";
+    proxyRes.on("data", function (chunk) {
+        chunk = chunk.toString("utf-8");
+        bodyResponse += chunk;
+    });
 
-        logArray.push(sparqlLogEntry);
-        emitRequest(sparqlLogEntry);
-        console.log("New SPARQL request", sparqlLogEntry);
-    }
+    res.end = function() {
+        if (req.query) {
+            var sparqlLogEntry = {
+                "url": req.url,
+                "destinationUrl": endpoint,
+                "method": req.method,
+                "request-headers": req.headers,
+                "query": req.query,
+                "client": req.headers["x-forwarded-for"] ||
+                        req.connection.remoteAddress ||
+                        req.socket.remoteAddress ||
+                        req.connection.socket.remoteAddress,
+                "response-headers": proxyRes.headers,
+                "response": bodyResponse
+            };
+            logArray.push(sparqlLogEntry);
+            emitRequest(sparqlLogEntry);
+            console.log("New SPARQL request", sparqlLogEntry);
+        }
+    };
+});
 
+var serverSparql = http.createServer(function (req, res) {
     proxy.web(req, res, {
         target: endpoint
     });
@@ -81,6 +89,7 @@ app.get("/", function (req, res) {
     res.end();
 });
 
+
 var io = require("socket.io").listen(serverLog);
 io.sockets.on("connection", function (socket) {
     console.log("Client connected", socket.client.id);
@@ -90,5 +99,3 @@ var emitRequest = function (data) {
 };
 
 console.log("SPARQL statistics listening on", serverLog.address());
-
-
